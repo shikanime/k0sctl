@@ -72,11 +72,43 @@ type Reader struct {
 	manifests    []*ResourceDefinition
 }
 
-func name(r io.Reader) string {
-	if n, ok := r.(*os.File); ok {
-		return n.Name()
+// NamedReader is an io.Reader that carries a human-friendly name.
+// It can be used to provide a source name for manifests when parsing
+// from non-file readers (e.g., strings or network streams).
+type NamedReader struct {
+	R    io.Reader
+	Name string
+}
+
+// Read implements io.Reader.
+func (nr *NamedReader) Read(p []byte) (int, error) {
+	if nr == nil || nr.R == nil {
+		return 0, io.EOF
 	}
-	return "manifest"
+	return nr.R.Read(p)
+}
+
+func NewNamedReader(r io.Reader, name string) *NamedReader {
+	return &NamedReader{R: r, Name: name}
+}
+
+// ReaderWithName allows custom readers to expose a Name for origin tracking.
+// If a reader implements this interface, its Name() will be used.
+type ReaderWithName interface {
+	Name() string
+}
+
+func name(r io.Reader) string {
+	switch v := r.(type) {
+	case *os.File:
+		return v.Name()
+	case ReaderWithName:
+		return v.Name()
+	case *NamedReader:
+		return v.Name
+	default:
+		return "manifest"
+	}
 }
 
 // Parse parses Kubernetes resource definitions from the provided input stream. They are then available via the Resources() or GetResources(apiVersion, kind) methods.
@@ -108,10 +140,11 @@ func (r *Reader) Parse(input io.Reader) error {
 			if r.IgnoreErrors {
 				continue
 			}
-			return fmt.Errorf("missing apiVersion or kind in resource %s", name(input))
+			return fmt.Errorf("missing apiVersion or kind in resource %s: %w", name(input), err)
 		}
 
 		// Store the raw chunk
+		rd.Origin = name(input)
 		rd.Raw = append([]byte{}, rawChunk...)
 		r.manifests = append(r.manifests, rd)
 	}

@@ -180,3 +180,19 @@ data:
 	require.Contains(t, parsed.Data, "payload")
 	require.Len(t, parsed.Data["payload"], len(largeData))
 }
+
+func TestReader_OriginUsesNamedReaderName(t *testing.T) {
+	input := `apiVersion: v1
+kind: Pod
+metadata:
+  name: pod1
+`
+
+	nr := &manifest.NamedReader{R: strings.NewReader(input), Name: "custom-src.yaml"}
+	r := &manifest.Reader{}
+	require.NoError(t, r.Parse(nr))
+	require.Equal(t, 1, r.Len(), "Expected a single manifest to be parsed")
+
+	resource := r.Resources()[0]
+	assert.Equal(t, "custom-src.yaml", resource.Origin, "Origin should use NamedReader name")
+}
