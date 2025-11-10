@@ -57,12 +57,12 @@ metadata:
 `
 	r := &manifest.Reader{}
 
-	// Parse first reader
-	err := r.Parse(strings.NewReader(input1))
+	// Parse first reader with an explicit name via NamedReader
+	err := r.Parse(manifest.NewNamedReader(strings.NewReader(input1), "first.yaml"))
 	require.NoError(t, err, "Parse should not return an error for input1")
 
-	// Parse second reader
-	err = r.Parse(strings.NewReader(input2))
+	// Parse second reader with a different explicit name
+	err = r.Parse(manifest.NewNamedReader(strings.NewReader(input2), "second.yaml"))
 	require.NoError(t, err, "Parse should not return an error for input2")
 
 	// Assert that both manifests are parsed
@@ -73,11 +73,13 @@ metadata:
 	assert.Equal(t, "v1", pod.APIVersion, "Unexpected apiVersion for Pod")
 	assert.Equal(t, "Pod", pod.Kind, "Unexpected kind for Pod")
 	require.Len(t, pod.Raw, len(input1))
+	assert.Equal(t, "first.yaml", pod.Origin)
 
 	service := r.Resources()[1]
 	assert.Equal(t, "v1", service.APIVersion, "Unexpected apiVersion for Service")
 	assert.Equal(t, "Service", service.Kind, "Unexpected kind for Service")
 	require.Len(t, service.Raw, len(input2))
+	assert.Equal(t, "second.yaml", service.Origin)
 }
 
 func TestReader_FilterResources(t *testing.T) {
