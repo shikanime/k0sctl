@@ -73,14 +73,33 @@ type Reader struct {
 }
 
 func name(r io.Reader) string {
-	if n, ok := r.(*os.File); ok {
-		return n.Name()
+	if f, ok := r.(*os.File); ok {
+		return f.Name()
 	}
 	return "manifest"
 }
 
+// ParseOption configures optional behavior for Parse.
+type ParseOption func(*parseOptions)
+
+type parseOptions struct {
+	origin string
+}
+
+// WithOrigin overrides the origin name for resources parsed from the reader.
+func WithOrigin(origin string) ParseOption {
+	return func(po *parseOptions) {
+		po.origin = origin
+	}
+}
+
 // Parse parses Kubernetes resource definitions from the provided input stream. They are then available via the Resources() or GetResources(apiVersion, kind) methods.
-func (r *Reader) Parse(input io.Reader) error {
+func (r *Reader) Parse(input io.Reader, opts ...ParseOption) error {
+	po := &parseOptions{}
+	for _, opt := range opts {
+		opt(po)
+	}
+
 	yamlReader := yamlutil.NewYAMLReader(bufio.NewReader(input))
 
 	for {
@@ -108,10 +127,11 @@ func (r *Reader) Parse(input io.Reader) error {
 			if r.IgnoreErrors {
 				continue
 			}
-			return fmt.Errorf("missing apiVersion or kind in resource %s", name(input))
+			return fmt.Errorf("missing apiVersion or kind in resource %s: %w", name(input), err)
 		}
 
 		// Store the raw chunk
+		rd.Origin = po.origin
 		rd.Raw = append([]byte{}, rawChunk...)
 		r.manifests = append(r.manifests, rd)
 	}
@@ -120,13 +140,13 @@ func (r *Reader) Parse(input io.Reader) error {
 }
 
 // ParseString parses Kubernetes resource definitions from the provided string.
-func (r *Reader) ParseString(input string) error {
-	return r.Parse(strings.NewReader(input))
+func (r *Reader) ParseString(input string, opts ...ParseOption) error {
+	return r.Parse(strings.NewReader(input), opts...)
 }
 
 // ParseBytes parses Kubernetes resource definitions from the provided byte slice.
-func (r *Reader) ParseBytes(input []byte) error {
-	return r.Parse(bytes.NewReader(input))
+func (r *Reader) ParseBytes(input []byte, opts ...ParseOption) error {
+	return r.Parse(bytes.NewReader(input), opts...)
 }
 
 // Resources returns all parsed Kubernetes resource definitions.
