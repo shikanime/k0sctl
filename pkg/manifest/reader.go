@@ -127,6 +127,8 @@ func (r *Reader) Parse(input io.Reader) error {
 		}
 
 		// Store the raw chunk
+		// Also preserve origin (file path) when available
+		rd.Origin = name(input)
 		rd.Raw = append([]byte{}, rawChunk...)
 		r.manifests = append(r.manifests, rd)
 	}
@@ -144,8 +146,42 @@ func (r *Reader) ParseString(input string) error {
 }
 
 // ParseBytes parses Kubernetes resource definitions from the provided byte slice.
-func (r *Reader) ParseBytes(input []byte) error {
-	return r.Parse(bytes.NewReader(input))
+func (r *Reader) ParseBytes(input []byte, origin string) error {
+	scanner := bufio.NewScanner(bytes.NewReader(input))
+	scanner.Split(yamlDocumentSplit)
+
+	for scanner.Scan() {
+		rawChunk := scanner.Bytes()
+
+		if len(rawChunk) == 0 {
+			continue
+		}
+
+		rd := &ResourceDefinition{}
+		if err := yaml.Unmarshal(rawChunk, rd); err != nil {
+			if r.IgnoreErrors {
+				continue
+			}
+			return fmt.Errorf("failed to decode resource %s: %w", origin, err)
+		}
+
+		if rd.APIVersion == "" || rd.Kind == "" {
+			if r.IgnoreErrors {
+				continue
+			}
+			return fmt.Errorf("missing apiVersion or kind in resource %s", origin)
+		}
+
+		rd.Origin = origin
+		rd.Raw = append([]byte{}, rawChunk...)
+		r.manifests = append(r.manifests, rd)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading input: %w", err)
+	}
+
+	return nil
 }
 
 // Resources returns all parsed Kubernetes resource definitions.

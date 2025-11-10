@@ -220,7 +220,7 @@ func initConfig(ctx *cli.Context) error {
 
 		log.Debugf("parsing configuration from %s", f)
 
-		if err := manifestReader.ParseBytes(subst); err != nil {
+		if err := manifestReader.ParseBytes(subst, f); err != nil {
 			return fmt.Errorf("failed to parse config: %w", err)
 		}
 
@@ -274,6 +274,13 @@ func readConfig(ctx *cli.Context) (*v1beta1.Cluster, error) {
 	if err := ctlConfigs[0].Unmarshal(cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal cluster config: %w", err)
 	}
+
+    // Resolve cluster-scoped resources against the manifest origin
+    origin := ctlConfigs[0].Origin
+    if err := cfg.Resolve(origin); err != nil {
+        return nil, err
+    }
+
 	if k0sConfigs, err := mr.GetResources("k0s.k0sproject.io/v1beta1", "ClusterConfig"); err == nil && len(k0sConfigs) > 0 {
 		for _, k0sConfig := range k0sConfigs {
 			k0s := make(dig.Mapping)

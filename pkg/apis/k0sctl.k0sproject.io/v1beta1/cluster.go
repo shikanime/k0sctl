@@ -25,10 +25,10 @@ type ClusterMetadata struct {
 
 // Cluster describes launchpad.yaml configuration
 type Cluster struct {
-	APIVersion string           `yaml:"apiVersion"`
-	Kind       string           `yaml:"kind"`
-	Metadata   *ClusterMetadata `yaml:"metadata"`
-	Spec       *cluster.Spec    `yaml:"spec"`
+    APIVersion string           `yaml:"apiVersion"`
+    Kind       string           `yaml:"kind"`
+    Metadata   *ClusterMetadata `yaml:"metadata"`
+    Spec       *cluster.Spec    `yaml:"spec"`
 }
 
 // UnmarshalYAML sets in some sane defaults when unmarshaling the data from yaml
@@ -109,4 +109,13 @@ func (c *Cluster) StorageType() string {
 
 	// default to etcd otherwise
 	return "etcd"
+}
+
+// Resolve prepares cluster-scoped resources after unmarshalling.
+// Currently cascades resolution into spec using the given origin.
+func (c *Cluster) Resolve(origin string) error {
+    if c.Spec == nil {
+        return nil
+    }
+    return c.Spec.Resolve(origin)
 }

@@ -11,11 +11,11 @@ import (
 
 // Spec defines cluster config spec section
 type Spec struct {
-	Hosts   Hosts   `yaml:"hosts,omitempty"`
-	K0s     *K0s    `yaml:"k0s,omitempty"`
-	Options Options `yaml:"options"`
+    Hosts   Hosts   `yaml:"hosts,omitempty"`
+    K0s     *K0s    `yaml:"k0s,omitempty"`
+    Options Options `yaml:"options"`
 
-	k0sLeader *Host
+    k0sLeader *Host
 }
 
 // UnmarshalYAML sets in some sane defaults when unmarshaling the data from yaml
@@ -172,7 +172,7 @@ func (s *Spec) InternalKubeAPIURL() string {
 
 // NodeInternalKubeAPIURL returns a cluster internal url to the node's kube API
 func (s *Spec) NodeInternalKubeAPIURL(h *Host) string {
-	addr := "127.0.0.1"
+    addr := "127.0.0.1"
 
 	// spec.api.onlyBindToAddress was introduced in k0s 1.30. Setting it to true will make the API server only
 	// listen on the IP address configured by the `address` option.
@@ -187,9 +187,18 @@ func (s *Spec) NodeInternalKubeAPIURL(h *Host) string {
 	return fmt.Sprintf("https://%s:%d", formatIPV6(addr), s.APIPort())
 }
 
+// Resolve prepares spec-scoped resources after unmarshalling.
+// Currently cascades resolution into hosts using the given origin.
+func (s *Spec) Resolve(origin string) error {
+    if err := s.Hosts.Resolve(origin); err != nil {
+        return err
+    }
+    return nil
+}
+
 func formatIPV6(address string) string {
-	if strings.Contains(address, ":") {
-		return fmt.Sprintf("[%s]", address)
-	}
-	return address
+    if strings.Contains(address, ":") {
+        return fmt.Sprintf("[%s]", address)
+    }
+    return address
 }

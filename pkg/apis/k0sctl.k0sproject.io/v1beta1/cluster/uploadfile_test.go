@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"os"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -62,4 +64,24 @@ perm: 0
 `)
 
 	require.Error(t, yaml.Unmarshal(yml, &u))
+}
+
+func TestUploadFileResolveURLSetsDst(t *testing.T) {
+	u := &UploadFile{Source: "https://example.com/assets/app.tar.gz", DestinationDir: "/opt"}
+	require.NoError(t, u.Resolve("/tmp/config.yaml"))
+	require.Equal(t, "/opt/app.tar.gz", u.DestinationFile)
+	require.Equal(t, "", u.Base)
+	require.Len(t, u.Sources, 0)
+}
+
+func TestUploadFileResolveLocalSingleFile(t *testing.T) {
+	tmp := t.TempDir()
+	fp := path.Join(tmp, "a.txt")
+	require.NoError(t, os.WriteFile(fp, []byte("a"), 0o640))
+
+	u := &UploadFile{Source: "a.txt"}
+	require.NoError(t, u.Resolve(path.Join(tmp, "cfg.yaml")))
+	require.Equal(t, tmp, u.Base)
+	require.Len(t, u.Sources, 1)
+	require.Equal(t, "a.txt", u.Sources[0].Path)
 }
