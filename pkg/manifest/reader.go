@@ -108,10 +108,11 @@ func (r *Reader) Parse(input io.Reader) error {
 			if r.IgnoreErrors {
 				continue
 			}
-			return fmt.Errorf("missing apiVersion or kind in resource %s", name(input))
+			return fmt.Errorf("missing apiVersion or kind in resource %s: %w", name(input), err)
 		}
 
 		// Store the raw chunk
+		// Also preserve origin (file path) when available
 		rd.Raw = append([]byte{}, rawChunk...)
 		r.manifests = append(r.manifests, rd)
 	}
