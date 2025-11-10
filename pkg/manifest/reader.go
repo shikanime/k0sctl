@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path"
 	"regexp"
 	"strings"
@@ -72,15 +71,23 @@ type Reader struct {
 	manifests    []*ResourceDefinition
 }
 
+// namedReader allows readers to expose a name for origin tracking.
+// Any io.Reader that implements Name() string will be used for origin.
+type namedReader interface {
+	Name() string
+}
+
 func name(r io.Reader) string {
-	if n, ok := r.(*os.File); ok {
+	if n, ok := r.(namedReader); ok {
 		return n.Name()
 	}
-	return "manifest"
+	return ""
 }
 
 // Parse parses Kubernetes resource definitions from the provided input stream. They are then available via the Resources() or GetResources(apiVersion, kind) methods.
 func (r *Reader) Parse(input io.Reader) error {
+	// Determine origin from the reader name (if available)
+	originStr := name(input)
 	yamlReader := yamlutil.NewYAMLReader(bufio.NewReader(input))
 
 	for {
@@ -101,17 +108,19 @@ func (r *Reader) Parse(input io.Reader) error {
 			if r.IgnoreErrors {
 				continue
 			}
-			return fmt.Errorf("failed to decode resource %s: %w", name(input), err)
+			return fmt.Errorf("failed to decode resource %s: %w", originStr, err)
 		}
 
 		if rd.APIVersion == "" || rd.Kind == "" {
 			if r.IgnoreErrors {
 				continue
 			}
-			return fmt.Errorf("missing apiVersion or kind in resource %s", name(input))
+			return fmt.Errorf("missing apiVersion or kind in resource %s", originStr)
 		}
 
 		// Store the raw chunk
+		// Also preserve origin (file path) when available
+		rd.Origin = originStr
 		rd.Raw = append([]byte{}, rawChunk...)
 		r.manifests = append(r.manifests, rd)
 	}
@@ -128,6 +137,20 @@ func (r *Reader) ParseString(input string) error {
 func (r *Reader) ParseBytes(input []byte) error {
 	return r.Parse(bytes.NewReader(input))
 }
+
+// NamedReader wraps an io.Reader and provides a Name() for origin tracking.
+type NamedReader struct {
+	io.Reader
+	n string
+}
+
+// NewNamedReader constructs a reader that reports a given name via Name().
+func NewNamedReader(r io.Reader, name string) *NamedReader {
+	return &NamedReader{Reader: r, n: name}
+}
+
+// Name returns the configured name.
+func (nr *NamedReader) Name() string { return nr.n }
 
 // Resources returns all parsed Kubernetes resource definitions.
 func (r *Reader) Resources() []*ResourceDefinition {
